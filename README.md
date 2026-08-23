@@ -2,9 +2,10 @@
 
 An analyzer plugin for Rust source files. It compiles to `wasm32-wasip2` and
 exports an async WASI Preview 3 WIT/component ABI through `wit-bindgen 0.60.0`.
-It extracts
-English source messages from `t!("...")` macros and returns locations plus an
-AST-local anchor through the `tfm:plugin@0.2.0` contract.
+It extracts English source messages from `t!("...")` macros plus high-confidence
+implicit GPUI text passed to `child`, `label`, `placeholder`, and `tooltip`.
+It returns locations plus an AST-local anchor through the `tfm:plugin@0.3.0`
+contract.
 
 ```sh
 cargo test

@@ -84,7 +84,8 @@ impl<'ast> Visit<'ast> for MessageVisitor {
     }
 
     fn visit_expr_method_call(&mut self, method_call: &'ast ExprMethodCall) {
-        if matches!(method_call.method.to_string().as_str(), "child" | "label")
+        let method = method_call.method.to_string();
+        if is_implicit_ui_method(&method)
             && let Some(Expr::Lit(ExprLit {
                 lit: Lit::Str(string),
                 ..
@@ -111,13 +112,17 @@ impl<'ast> Visit<'ast> for MessageVisitor {
                     symbol: Some(scope.into()),
                     anchor: format!(
                         "implicit::{scope}::{}@{}:{}",
-                        method_call.method, start.line, start.column
+                        method, start.line, start.column
                     ),
                     context_hints: vec![],
                 });
         }
         syn::visit::visit_expr_method_call(self, method_call);
     }
+}
+
+fn is_implicit_ui_method(method: &str) -> bool {
+    matches!(method, "child" | "label" | "placeholder" | "tooltip")
 }
 
 fn is_implicit_ui_text(value: &str) -> bool {
@@ -192,6 +197,24 @@ mod tests {
             message.occurrences[0]
                 .anchor
                 .starts_with("implicit::render::")
+        }));
+    }
+
+    #[test]
+    fn extracts_implicit_gpui_input_and_tooltip_literals() {
+        let analysis = extract(
+            "fn render() { input().placeholder(\"Search resources\").tooltip(\"Choose directory\"); }",
+        )
+        .unwrap();
+
+        assert_eq!(analysis.messages.len(), 2);
+        assert!(analysis.messages.iter().any(|message| {
+            message.source == "Search resources"
+                && message.occurrences[0].anchor.contains("::placeholder@")
+        }));
+        assert!(analysis.messages.iter().any(|message| {
+            message.source == "Choose directory"
+                && message.occurrences[0].anchor.contains("::tooltip@")
         }));
     }
 
