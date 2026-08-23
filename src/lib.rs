@@ -89,7 +89,7 @@ impl<'ast> Visit<'ast> for MessageVisitor {
                 lit: Lit::Str(string),
                 ..
             })) = method_call.args.first()
-            && !string.value().is_empty()
+            && is_implicit_ui_text(&string.value())
         {
             let scope = self.scopes.last().map(String::as_str).unwrap_or("<module>");
             let start = string.span().start();
@@ -118,6 +118,15 @@ impl<'ast> Visit<'ast> for MessageVisitor {
         }
         syn::visit::visit_expr_method_call(self, method_call);
     }
+}
+
+fn is_implicit_ui_text(value: &str) -> bool {
+    !matches!(value, "AI" | "IP" | "JSON" | "KCC" | "MCP" | "YAML")
+        && value
+            .chars()
+            .filter(|character| character.is_alphabetic())
+            .count()
+            >= 3
 }
 
 fn first_string_argument(
@@ -184,5 +193,15 @@ mod tests {
                 .anchor
                 .starts_with("implicit::render::")
         }));
+    }
+
+    #[test]
+    fn excludes_emoji_and_short_technical_ui_tokens() {
+        let analysis = extract(
+            "fn render() { div().child(\"📁\").label(\"AI\").label(\"YAML\").child(\"Settings\"); }",
+        )
+        .unwrap();
+        assert_eq!(analysis.messages.len(), 1);
+        assert_eq!(analysis.messages[0].source, "Settings");
     }
 }
