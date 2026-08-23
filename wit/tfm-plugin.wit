@@ -1,5 +1,5 @@
-/// Synced from tfm-git/tfm at commit 74b45b6.
-package tfm:plugin@0.1.0;
+/// Synced from tfm-git/tfm plugin ABI v0.2.0.
+package tfm:plugin@0.2.0;
 
 interface types {
   record position {
@@ -21,6 +21,7 @@ interface types {
   record occurrence {
     range: range,
     symbol: option<string>,
+    anchor: string,
   }
 
   record message {
