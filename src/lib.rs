@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use syn::{Expr, ExprLit, Lit, Macro, Token, visit::Visit};
+use syn::{Expr, ExprLit, ExprMethodCall, Lit, Macro, Token, visit::Visit};
 use tfm::plugin::types::{Diagnostic, Message, Occurrence, Position, Range};
 
 wit_bindgen::generate!({
@@ -82,6 +82,42 @@ impl<'ast> Visit<'ast> for MessageVisitor {
         syn::visit::visit_item_fn(self, function);
         self.scopes.pop();
     }
+
+    fn visit_expr_method_call(&mut self, method_call: &'ast ExprMethodCall) {
+        if matches!(method_call.method.to_string().as_str(), "child" | "label")
+            && let Some(Expr::Lit(ExprLit {
+                lit: Lit::Str(string),
+                ..
+            })) = method_call.args.first()
+            && !string.value().is_empty()
+        {
+            let scope = self.scopes.last().map(String::as_str).unwrap_or("<module>");
+            let start = string.span().start();
+            let end = string.span().end();
+            self.messages
+                .entry(string.value())
+                .or_default()
+                .push(Occurrence {
+                    range: Range {
+                        start: Position {
+                            line: start.line as u32,
+                            column: start.column as u32,
+                        },
+                        end: Position {
+                            line: end.line as u32,
+                            column: end.column as u32,
+                        },
+                    },
+                    symbol: Some(scope.into()),
+                    anchor: format!(
+                        "implicit::{scope}::{}@{}:{}",
+                        method_call.method, start.line, start.column
+                    ),
+                    context_hints: vec![],
+                });
+        }
+        syn::visit::visit_expr_method_call(self, method_call);
+    }
 }
 
 fn first_string_argument(
@@ -136,5 +172,17 @@ mod tests {
     fn reports_nonliteral_messages() {
         let analysis = extract("fn main() { let greeting = t!(message); }").unwrap();
         assert_eq!(analysis.diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn extracts_implicit_gpui_child_and_label_literals() {
+        let analysis =
+            extract("fn render() { div().child(\"Settings\").label(\"Save changes\"); }").unwrap();
+        assert_eq!(analysis.messages.len(), 2);
+        assert!(analysis.messages.iter().all(|message| {
+            message.occurrences[0]
+                .anchor
+                .starts_with("implicit::render::")
+        }));
     }
 }
