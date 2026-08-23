@@ -115,6 +115,7 @@ fn first_string_argument(
             },
             symbol: None,
             anchor,
+            context_hints: vec![],
         },
     )))
 }
