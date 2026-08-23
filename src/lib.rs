@@ -49,12 +49,18 @@ fn extract(source: &str) -> Result<Analysis, String> {
 struct MessageVisitor {
     messages: BTreeMap<String, Vec<Occurrence>>,
     diagnostics: Vec<Diagnostic>,
+    scopes: Vec<String>,
+    macro_counts: BTreeMap<String, u32>,
 }
 
 impl<'ast> Visit<'ast> for MessageVisitor {
     fn visit_macro(&mut self, macro_call: &'ast Macro) {
         if macro_call.path.is_ident("t") {
-            match first_string_argument(macro_call) {
+            let scope = self.scopes.last().map(String::as_str).unwrap_or("<module>");
+            let count = self.macro_counts.entry(scope.into()).or_default();
+            *count += 1;
+            let anchor = format!("{scope}::t!#{count}");
+            match first_string_argument(macro_call, anchor) {
                 Ok(Some((source, occurrence))) => {
                     self.messages.entry(source).or_default().push(occurrence);
                 }
@@ -70,9 +76,18 @@ impl<'ast> Visit<'ast> for MessageVisitor {
         }
         syn::visit::visit_macro(self, macro_call);
     }
+
+    fn visit_item_fn(&mut self, function: &'ast syn::ItemFn) {
+        self.scopes.push(function.sig.ident.to_string());
+        syn::visit::visit_item_fn(self, function);
+        self.scopes.pop();
+    }
 }
 
-fn first_string_argument(macro_call: &Macro) -> Result<Option<(String, Occurrence)>, String> {
+fn first_string_argument(
+    macro_call: &Macro,
+    anchor: String,
+) -> Result<Option<(String, Occurrence)>, String> {
     let arguments = macro_call
         .parse_body_with(syn::punctuated::Punctuated::<Expr, Token![,]>::parse_terminated)
         .map_err(|error| error.to_string())?;
@@ -99,6 +114,7 @@ fn first_string_argument(macro_call: &Macro) -> Result<Option<(String, Occurrenc
                 },
             },
             symbol: None,
+            anchor,
         },
     )))
 }
@@ -112,6 +128,7 @@ mod tests {
         let analysis = extract("fn main() { let greeting = t!(\"Hello, world!\"); }").unwrap();
         assert_eq!(analysis.messages.len(), 1);
         assert_eq!(analysis.messages[0].source, "Hello, world!");
+        assert_eq!(analysis.messages[0].occurrences[0].anchor, "main::t!#1");
     }
 
     #[test]
