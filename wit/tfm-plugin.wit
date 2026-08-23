@@ -1,0 +1,53 @@
+/// Synced from tfm-git/tfm at commit 74b45b6.
+package tfm:plugin@0.1.0;
+
+interface types {
+  record position {
+    line: u32,
+    column: u32,
+  }
+
+  record range {
+    start: position,
+    end: position,
+  }
+
+  record document {
+    path: string,
+    language: string,
+    text: string,
+  }
+
+  record occurrence {
+    range: range,
+    symbol: option<string>,
+  }
+
+  record message {
+    source: string,
+    occurrences: list<occurrence>,
+  }
+
+  record diagnostic {
+    message: string,
+    range: option<range>,
+  }
+
+  record analysis {
+    messages: list<message>,
+    diagnostics: list<diagnostic>,
+  }
+
+  record manifest {
+    name: string,
+    version: string,
+    languages: list<string>,
+  }
+}
+
+world analyzer {
+  use types.{analysis, document, manifest};
+
+  export manifest: async func() -> manifest;
+  export analyze: async func(document: document) -> result<analysis, string>;
+}
