@@ -1,5 +1,5 @@
-/// Synced from tfm-git/tfm plugin ABI v0.2.0.
-package tfm:plugin@0.2.0;
+/// Synced from tfm-git/tfm plugin ABI v0.3.0.
+package tfm:plugin@0.3.0;
 
 interface types {
   record position {
@@ -18,10 +18,20 @@ interface types {
     text: string,
   }
 
+  enum context-kind {
+    hover,
+  }
+
+  record context-hint {
+    kind: context-kind,
+    range: range,
+  }
+
   record occurrence {
     range: range,
     symbol: option<string>,
     anchor: string,
+    context-hints: list<context-hint>,
   }
 
   record message {

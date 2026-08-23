@@ -16,5 +16,5 @@ The plugin receives source text from the host and has no filesystem, network,
 environment, Git, LSP, or LLM capability.
 
 The WIT contract is vendored from [`tfm`](https://github.com/tfm-git/tfm) ABI
-v0.2.0. A release process must update it only together with a reviewed ABI
+v0.3.0. A release process must update it only together with a reviewed ABI
 version change.
