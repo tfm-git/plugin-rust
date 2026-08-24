@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use syn::{Expr, ExprLit, ExprMethodCall, Lit, Macro, Token, visit::Visit};
+use syn::{Expr, ExprLit, ExprMacro, ExprMethodCall, Lit, Macro, Token, visit::Visit};
 use tfm::plugin::types::{Diagnostic, Message, Occurrence, Position, Range};
 
 wit_bindgen::generate!({
@@ -85,6 +85,7 @@ impl<'ast> Visit<'ast> for MessageVisitor {
 
     fn visit_expr_method_call(&mut self, method_call: &'ast ExprMethodCall) {
         let method = method_call.method.to_string();
+        let scope = self.scopes.last().map(String::as_str).unwrap_or("<module>");
         if is_implicit_ui_method(&method)
             && let Some(Expr::Lit(ExprLit {
                 lit: Lit::Str(string),
@@ -92,7 +93,6 @@ impl<'ast> Visit<'ast> for MessageVisitor {
             })) = method_call.args.first()
             && is_implicit_ui_text(&string.value())
         {
-            let scope = self.scopes.last().map(String::as_str).unwrap_or("<module>");
             let start = string.span().start();
             let end = string.span().end();
             self.messages
@@ -116,6 +116,16 @@ impl<'ast> Visit<'ast> for MessageVisitor {
                     ),
                     context_hints: vec![],
                 });
+        } else if is_implicit_ui_method(&method)
+            && let Some(Expr::Macro(ExprMacro { mac, .. })) = method_call.args.first()
+            && mac.path.is_ident("format")
+        {
+            let anchor = format!("implicit::{scope}::{method}-format");
+            if let Ok(Some((source, occurrence))) = first_string_argument(mac, anchor) {
+                if is_implicit_ui_text(&source) {
+                    self.messages.entry(source).or_default().push(occurrence);
+                }
+            }
         }
         syn::visit::visit_expr_method_call(self, method_call);
     }
@@ -237,6 +247,19 @@ mod tests {
             message.source == "Choose directory"
                 && message.occurrences[0].anchor.contains("::tooltip@")
         }));
+    }
+
+    #[test]
+    fn extracts_formatted_gpui_copy_for_review() {
+        let analysis = extract("fn render() { div().child(format!(\"YAML: {name}\")); }").unwrap();
+
+        assert_eq!(analysis.messages.len(), 1);
+        assert_eq!(analysis.messages[0].source, "YAML: {name}");
+        assert!(
+            analysis.messages[0].occurrences[0]
+                .anchor
+                .contains("::child-format")
+        );
     }
 
     #[test]

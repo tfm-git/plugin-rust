@@ -8,6 +8,10 @@ to `child`, `label`, `placeholder`, and `tooltip`.
 It returns locations plus an AST-local anchor through the `tfm:plugin@0.3.0`
 contract.
 
+The same GPUI methods also pre-extract a literal source template in
+`format!("…")`. Those candidates need review and explicit conversion to the
+runtime template form, such as `t!("YAML: {name}", name = name)`.
+
 ```sh
 cargo test
 cargo build --release --target wasm32-wasip2
