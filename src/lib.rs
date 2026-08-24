@@ -55,7 +55,7 @@ struct MessageVisitor {
 
 impl<'ast> Visit<'ast> for MessageVisitor {
     fn visit_macro(&mut self, macro_call: &'ast Macro) {
-        if macro_call.path.is_ident("t") {
+        if is_translation_macro(macro_call) {
             let scope = self.scopes.last().map(String::as_str).unwrap_or("<module>");
             let count = self.macro_counts.entry(scope.into()).or_default();
             *count += 1;
@@ -121,6 +121,19 @@ impl<'ast> Visit<'ast> for MessageVisitor {
     }
 }
 
+fn is_translation_macro(macro_call: &Macro) -> bool {
+    if macro_call.path.is_ident("t") {
+        return true;
+    }
+    let segments = macro_call
+        .path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>();
+    matches!(segments.as_slice(), [runtime, marker] if runtime == "tfm_runtime" && marker == "t")
+}
+
 fn is_implicit_ui_method(method: &str) -> bool {
     matches!(method, "child" | "label" | "placeholder" | "tooltip")
 }
@@ -180,6 +193,14 @@ mod tests {
         assert_eq!(analysis.messages.len(), 1);
         assert_eq!(analysis.messages[0].source, "Hello, world!");
         assert_eq!(analysis.messages[0].occurrences[0].anchor, "main::t!#1");
+    }
+
+    #[test]
+    fn finds_qualified_tfm_runtime_macro() {
+        let analysis =
+            extract("fn main() { let greeting = tfm_runtime::t!(\"Hello, world!\"); }").unwrap();
+        assert_eq!(analysis.messages.len(), 1);
+        assert_eq!(analysis.messages[0].source, "Hello, world!");
     }
 
     #[test]
